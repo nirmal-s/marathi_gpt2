@@ -1,0 +1,6 @@
+# .gitignore
+# Ignore data files and model checkpoints
+/data/
+*.pt
+*.ckpt
+*.bin
