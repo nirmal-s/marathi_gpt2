@@ -4,3 +4,5 @@
 *.pt
 *.ckpt
 *.bin
+__pycache__/
+tokenize_marathi_llama2.py
