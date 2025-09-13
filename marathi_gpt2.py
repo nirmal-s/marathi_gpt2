@@ -15,22 +15,19 @@ class GPT2Config:
 class GPT2Block(nn.Module):
     def __init__(self, config: GPT2Config):
         super().__init__()
-        self.ln_1 = nn.LayerNorm(config.n_embd)
-        self.attn = nn.MultiheadAttention(config.n_embd, config.n_head, dropout=config.dropout, batch_first=True)
-        self.ln_2 = nn.LayerNorm(config.n_embd)
-        self.mlp = nn.Sequential(
-            nn.Linear(config.n_embd, 4 * config.n_embd),
-            nn.GELU(),
-            nn.Linear(4 * config.n_embd, config.n_embd),
-            nn.Dropout(config.dropout)
-        )
+        self.norm1 = nn.LayerNorm(config.n_embd)
+        self.self_attn = nn.MultiheadAttention(config.n_embd, config.n_head, dropout=config.dropout, batch_first=True)
+        self.norm2 = nn.LayerNorm(config.n_embd)
+        self.linear1 = nn.Linear(config.n_embd, 4 * config.n_embd)
+        self.linear2 = nn.Linear(4 * config.n_embd, config.n_embd)
+        self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, x, attn_mask=None):
         # Pre-norm
-        x_norm = self.ln_1(x)
-        attn_output, _ = self.attn(x_norm, x_norm, x_norm, attn_mask=attn_mask, need_weights=False)
+        x_norm = self.norm1(x)
+        attn_output, _ = self.self_attn(x_norm, x_norm, x_norm, attn_mask=attn_mask, need_weights=False)
         x = x + attn_output
-        x = x + self.mlp(self.ln_2(x))
+        x = x + self.dropout(self.linear2(torch.nn.functional.gelu(self.linear1(self.norm2(x)))))
         return x
 
 class GPT2Model(nn.Module):
@@ -41,8 +38,8 @@ class GPT2Model(nn.Module):
         self.wpe = nn.Embedding(config.n_positions, config.n_embd)
         self.drop = nn.Dropout(config.dropout)
         self.h = nn.ModuleList([GPT2Block(config) for _ in range(config.n_layer)])
-        self.ln_f = nn.LayerNorm(config.n_embd)
-        self.head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
+        self.norm_f = nn.LayerNorm(config.n_embd)
+        self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
 
     def forward(self, input_ids):
         bsz, seq_len = input_ids.size()
@@ -55,8 +52,8 @@ class GPT2Model(nn.Module):
         mask = mask.masked_fill(mask == 1, float('-inf')).masked_fill(mask == 0, float(0.0))
         for block in self.h:
             x = block(x, attn_mask=mask)
-        x = self.ln_f(x)
-        logits = self.head(x)
+        x = self.norm_f(x)
+        logits = self.lm_head(x)
         return logits
 
 # Example usage:
